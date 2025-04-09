@@ -43,16 +43,17 @@ Protocol layer (refined distributed protocol spec) – 🧩 Partially provided
 
 Implementation layer (concrete executable code) – 🧩 Partially provided
 
-You will complete the missing components in the protocol and implementation layers.
+You will complete the missing parts in the protocol and implementation layers.
+
 Specifically, you will implement and verify:
 
 `acceptor`
 
-`proposer`
-
 `election`
 
-Each missing function already has its signature defined — you only need to fill in the function body and provide proofs as required.
+`proposer`
+
+Each missing function already has its signature defined — you only need to fill in the function body and prove your implementation code refines the specifications in protocol layer.
 
 
 ## How to do it?
@@ -95,7 +96,7 @@ Refer to the Verus proof guide for examples:
 
 ### Requirements
 
-* Verus (We provide the specific version in the `verus` folder, where you can also find the installation documentationk)
+* Verus (We provide the specific version in the `verus` folder, where you can also find the installation documentation)
 * rustc (Last build was using rustc - 1.80.1 (3f5fd8dd4 2024-08-06))
 * .NET 6.0 SDK (https://dotnet.microsoft.com/download)
 * scons (`pip install scons`)
