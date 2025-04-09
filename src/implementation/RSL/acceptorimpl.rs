@@ -105,9 +105,9 @@ verus! {
             ensures
                 rc.valid(),
                 LAcceptorInit(
-                    rc@,
+                    rc@, /* used to convert the implementation type to protocol type */
                     c@
-                )
+                ) /* refinement condition */
         {
             let t2 = CBallot{
                 seqno: 0,

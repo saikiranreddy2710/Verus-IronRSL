@@ -39,9 +39,9 @@ This project follows IronFleet's two-level refinement approach for verifying dis
 
 Service layer (abstract spec) – ✅ Already provided
 
-Protocol layer (refined distributed protocol spec) – 🧩 Partially implemented
+Protocol layer (refined distributed protocol spec) – 🧩 Partially provided
 
-Implementation layer (concrete executable code) – 🧩 Partially implemented
+Implementation layer (concrete executable code) – 🧩 Partially provided
 
 You will complete the missing components in the protocol and implementation layers.
 Specifically, you will implement and verify:
@@ -56,7 +56,7 @@ Each missing function already has its signature defined — you only need to fil
 
 
 ## How to do it?
-You can complete the project in two main steps:
+You can do it in three main steps:
 
 *Step 1: Implement the Protocol Layer*
 
@@ -64,28 +64,28 @@ The protocol layer defines the system behavior in terms of specification functio
 
 - For each missing `spec fn` in `src/protocol/RSL/`, locate its corresponding `predicate` or `function` in the original IronFleet Dafny code.
 
-- Translate the Dafny logic into Verus `spec fn`.
+- Translate the Dafny code into Verus `spec fn`.
 
-- These `spec fn` serve as the reference model that the implementation must conform to.
+- These `spec fn` serve as the reference model to which the implementation must conform.
 
 
 *Step 2: Implement the Implementation Layer*
 
 The implementation layer contains the executable code for the system. Each  action in protocol layer should be implemented as a Verus `fn`.
 
-- For each `spec fn` you've defined, find the matching `fn` in src/implementation/RSL/.
+- For each `spec fn` you've defined, find the matching `fn` in `src/implementation/RSL/`.
 
 - Implement the logic inside the function to reflect the protocol’s intent.
 
-- Use Verus’s ensures clause to express that the function refines the `spec fn`.
+- Use Verus’s ensures clause to express that the function refines the `spec fn`. (already provided)
 
 *Step 3: Writing Proof Code*
 
-To verify that your implementation satisfies the spec, you need to include proof code.
+To verify that your implementation satisfies the spec, you need to write proof code.
 
 - Inline proofs: Embedded directly inside the `fn` body using assert statements and ghost variables.
 
-- Standalone proof functions: Written using `proof fn`, which are analogous to lemma in Dafny. Use this for complex reasoning or reusable proofs.
+- Standalone proof functions: Written using `proof fn`, which are analogous to `lemma` in Dafny. Use this for complex reasoning or reusable proofs.
 
 Refer to the Verus proof guide for examples:
 
@@ -103,12 +103,21 @@ Refer to the Verus proof guide for examples:
 
 ### Run verification
 ```
-cd verus-ironfleet/src
+cd verus-ironrsl/src
 verus main.rs
 ```
 
-# Notes on porting
+### Build the project
+We have not finished it, will be released later.
 
+# Notes
+
+- In protocol layer, you can only use spec types, such as Seq, Map, Set, int, nat.
+But in implementation layer, you can only use executable types, such as Vec, HashMap, HashSet, i32, i64, u64, etc. Their relationships are:
+   - Seq -> Vec
+   - Map -> HashMap
+   - Set -> HashSet
+   - int -> i32, i64, u64, etc. (I suggest you use u64 in the implementation layer).
 - Verus spec functions cannot have any mutable variables or iteration. Any code that depends on iteration in a Dafny (ghost) function needs to be written recursively or in a proof function. However, you can't call proof functions in pre/post-condition clauses.  
 - Verus doesn't support adding additional conditions on anything implementing a trait. I'm not sure how to implement the IronFleet structure of having a base, more abstract module and then refining it in each subclass. That's why the clauses from the framework abstract classes are just copied over into the lock functions.
 - Verus doesn't support using addition/other operations in a forall clause. For example, trying to state something about two adjacent items in a Dafny function usually looks like:
