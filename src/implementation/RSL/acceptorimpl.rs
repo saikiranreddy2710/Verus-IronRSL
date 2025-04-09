@@ -109,7 +109,43 @@ verus! {
                     c@
                 )
         {
-
+            let t2 = CBallot{
+                seqno: 0,
+                proposer_id: 0,
+            };
+            let t3: HashMap<COperationNumber,CVote> = HashMap::new();
+    
+            let len = c.all.config.replica_ids.len();
+            let mut t4: Vec<u64> = Vec::new();
+            let mut i = 0;
+            while i < len
+                invariant
+                    i <= len,
+                    t4.len() == i,
+                    forall |j:int| 0 <= j < i ==> t4[j] == 0,
+            {
+                t4.push(0);
+                i = i + 1;
+            }
+    
+            assert(t4.len() == len);
+            assert(forall |idx:int| 0 <= idx < t4.len() ==> t4[idx] == 0);
+    
+            let t5 = 0;
+    
+            let s = CAcceptor{constants:c, max_bal:t2, votes:t3, last_checkpointed_operation:t4, log_truncation_point:t5};
+    
+            let ghost ss = s@;
+            let ghost sc = c@;
+    
+            assert(ss.constants == sc);
+            assert(ss.max_bal == Ballot{seqno:0,proposer_id:0});
+            assert(ss.votes == Map::<OperationNumber, Vote>::empty());
+            assert(ss.last_checkpointed_operation.len() == sc.all.config.replica_ids.len());
+            assert(forall |idx:int| 0 <= idx < ss.last_checkpointed_operation.len() ==> ss.last_checkpointed_operation[idx] == 0);
+            assert(ss.log_truncation_point == 0);
+    
+            s
         }
 
         // #[verifier(external_body)]
@@ -121,7 +157,7 @@ verus! {
             ensures
                 self.valid(),
                 sent.valid(),
-                LAcceptorProcess1a(old(self)@, self@, inp@, sent@)
+                LAcceptorProcess1a(old(self)@, self@, inp@, sent@) /* this is the refinement obligation */
         {
 
         }

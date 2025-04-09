@@ -3,6 +3,16 @@ This project is a verus version of IronFleet from SOSP'15. [[paper](https://www.
 
 Our goal is to implement and formally verify the Multi-Paxos protocol via refinement, following IronFleet's methodology.
 
+## What is verus?
+
+Verus is a **verification language** (https://verus-lang.github.io/verus/guide/) developed by Microsoft Research, which extends Rust language. It is designed for writing both executable code and formal specifications, supporting:
+
+- A rich specification language (`spec`, `proof`, `ensures`, `requires`, `invariant`)
+- SMT-based automatic verification using Z3
+- Ghost variables, pure logic functions, and proof-carrying code
+
+It allows programmers to write real code and prove that it satisfies safety, security, or protocol correctness properties—just like Dafny, but with Rust-like syntax and idioms.
+
 ## Code Structure
 - `csharp` - The client and server written in C#. These call into the Verus code to run the system.
 - `src` – The verus code.
@@ -48,24 +58,44 @@ Each missing function already has its signature defined — you only need to fil
 ## How to do it?
 You can complete the project in two main steps:
 
-Step 1: Implement the Protocol Layer
+*Step 1: Implement the Protocol Layer*
 
-For each missing `spec fn` in `protocol/RSL`, locate the corresponding predicate in the original IronFleet Dafny code.
+The protocol layer defines the system behavior in terms of specification functions. These functions are written using `spec fn`, which are non-executable and describe logical behavior only.
 
-Translate the Dafny logic into Verus `spec fn`.
+- For each missing `spec fn` in `src/protocol/RSL/`, locate its corresponding `predicate` or `function` in the original IronFleet Dafny code.
 
-Step 2: Implement the Implementation Layer
+- Translate the Dafny logic into Verus `spec fn`.
 
-For each completed `spec fn`, find the corresponding concrete `fn` in implementation/RSL.
+- These `spec fn` serve as the reference model that the implementation must conform to.
 
-Implement the function and prove that it satisfies the specification, thereby completing the refinement proof.
 
+*Step 2: Implement the Implementation Layer*
+
+The implementation layer contains the executable code for the system. Each  action in protocol layer should be implemented as a Verus `fn`.
+
+- For each `spec fn` you've defined, find the matching `fn` in src/implementation/RSL/.
+
+- Implement the logic inside the function to reflect the protocol’s intent.
+
+- Use Verus’s ensures clause to express that the function refines the `spec fn`.
+
+*Step 3: Writing Proof Code*
+
+To verify that your implementation satisfies the spec, you need to include proof code.
+
+- Inline proofs: Embedded directly inside the `fn` body using assert statements and ghost variables.
+
+- Standalone proof functions: Written using `proof fn`, which are analogous to lemma in Dafny. Use this for complex reasoning or reusable proofs.
+
+Refer to the Verus proof guide for examples:
+
+👉 [Verus Proof Functions Guide](https://verus-lang.github.io/verus/guide/proof_functions.html)
 
 ## Building and running Verification
 
 ### Requirements
 
-* Verus
+* Verus (We provide the specific version in the `verus` folder, where you can also find the installation documentationk)
 * rustc (Last build was using rustc - 1.80.1 (3f5fd8dd4 2024-08-06))
 * .NET 6.0 SDK (https://dotnet.microsoft.com/download)
 * scons (`pip install scons`)

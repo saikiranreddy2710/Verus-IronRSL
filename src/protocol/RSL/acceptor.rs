@@ -41,8 +41,37 @@ verus! {
 
     pub open spec fn LAcceptorInit(a:LAcceptor, c:LReplicaConstants) -> bool
     {
-        
+        &&& a.constants == c 
+        &&& a.max_bal == Ballot{seqno:0,proposer_id:0}
+        &&& a.votes == Map::<OperationNumber, Vote>::empty()
+        &&& a.last_checkpointed_operation.len() == c.all.config.replica_ids.len()
+        &&& (forall |idx:int| 0 <= idx < a.last_checkpointed_operation.len() ==> a.last_checkpointed_operation[idx] == 0)
+        &&& a.log_truncation_point == 0
     }
+
+    /* 
+    An example Dafny spec code in IronFleet, what you need to do is for each spec fn here, 
+    find the coorsponding predicate in IronFleet code, and translate it to Verus.
+
+    predicate LAcceptorProcess1a(
+        s:LAcceptor, 
+        s':LAcceptor, 
+        inp:RslPacket, 
+        sent_packets:seq<RslPacket>
+    )
+        requires inp.msg.RslMessage_1a?
+    {
+        var m := inp.msg;
+        if inp.src in s.constants.all.config.replica_ids 
+            && BalLt(s.max_bal, m.bal_1a) 
+            && LReplicaConstantsValid(s.constants) then
+        && sent_packets == [ LPacket(inp.src, s.constants.all.config.replica_ids[s.constants.my_index],
+                                    RslMessage_1b(m.bal_1a, s.log_truncation_point, s.votes)) ]
+        && s' == s.(max_bal := m.bal_1a)
+        else
+        s' == s && sent_packets == []
+    }
+    */
 
     pub open spec fn LAcceptorProcess1a(
         s: LAcceptor, 
@@ -53,7 +82,34 @@ verus! {
         recommends
             inp.msg is RslMessage1a,
     {
-        
+        let m = inp.msg;
+        let bal = inp.msg->bal_1a;
+        if s.constants.all.config.replica_ids.contains(inp.src) 
+            && BalLt(s.max_bal, bal) 
+            && LReplicaConstantsValid(s.constants)
+        {
+            &&& sent_packets == seq![
+                RslPacket {
+                    src: s.constants.all.config.replica_ids.index(s.constants.my_index),
+                    dst: inp.src,
+                    msg: RslMessage::RslMessage1b {
+                        bal_1b: bal,
+                        log_truncation_point: s.log_truncation_point,
+                        votes: s.votes,
+                    }
+                }
+            ]
+            &&& s_ == LAcceptor {
+                constants: s.constants,
+                max_bal: bal,
+                votes: s.votes,
+                last_checkpointed_operation: s.last_checkpointed_operation,
+                log_truncation_point: s.log_truncation_point,
+            }
+        } else {
+            &&& s_ == s
+            &&& sent_packets == Seq::<RslPacket>::empty()
+        }
     }
 
     pub open spec fn LAcceptorProcess2a(
