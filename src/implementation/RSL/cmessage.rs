@@ -1,22 +1,22 @@
-use builtin::*;
-use builtin_macros::*;
-use vstd::{map::*, modes::*, prelude::*, seq::*, seq_lib::*, *};
-use vstd::{set::*, set_lib::*};
-use std::collections::*;
-use crate::protocol::RSL::types::*;
-use crate::protocol::RSL::message::*;
-use crate::protocol::RSL::environment::*;
-use crate::implementation::common::generic_refinement::*;
-use crate::implementation::RSL::types_i::*;
 use crate::common::framework::environment_s::*;
 use crate::common::native::io_s::*;
-use crate::implementation::RSL::appinterface::*;
-use crate::services::RSL::app_state_machine::*;
 use crate::common::native::io_s::*;
+use crate::implementation::common::generic_refinement::*;
 use crate::implementation::common::marshalling::*;
+use crate::implementation::RSL::appinterface::*;
+use crate::implementation::RSL::types_i::*;
+use crate::protocol::RSL::environment::*;
+use crate::protocol::RSL::message::*;
+use crate::protocol::RSL::types::*;
+use crate::services::RSL::app_state_machine::*;
+use builtin::*;
+use builtin_macros::*;
+use std::collections::*;
+use vstd::{map::*, modes::*, prelude::*, seq::*, seq_lib::*, *};
+use vstd::{set::*, set_lib::*};
 
-verus!{
-    
+verus! {
+
     #[derive(Clone)]
     pub enum CMessage {
         CMessageInvalid{},
@@ -131,7 +131,81 @@ verus!{
     // }
 
     impl CMessage{
-        pub open spec fn abstractable(self) -> bool 
+
+        pub fn clone_up_to_view(&self) -> (res: CMessage)
+        ensures res@ == self@
+    {
+        match self {
+            CMessage::CMessageInvalid {} => CMessage::CMessageInvalid {},
+
+            CMessage::CMessageRequest { seqno_req, val } =>
+                CMessage::CMessageRequest {
+                    seqno_req: *seqno_req,
+                    val: val.clone_up_to_view(),
+                },
+
+            CMessage::CMessage1a { bal_1a } =>
+                CMessage::CMessage1a {
+                    bal_1a: bal_1a.clone_up_to_view(),
+                },
+
+            CMessage::CMessage1b { bal_1b, log_truncation_point, votes } =>
+                CMessage::CMessage1b {
+                    bal_1b: bal_1b.clone_up_to_view(),
+                    log_truncation_point: *log_truncation_point,
+                    votes: clone_cvotes_up_to_view(votes),
+                },
+
+            CMessage::CMessage2a { bal_2a, opn_2a, val_2a } =>
+                CMessage::CMessage2a {
+                    bal_2a: bal_2a.clone_up_to_view(),
+                    opn_2a: *opn_2a,
+                    val_2a: clone_request_batch_up_to_view(val_2a),
+                },
+
+            CMessage::CMessage2b { bal_2b, opn_2b, val_2b } =>
+                CMessage::CMessage2b {
+                    bal_2b: bal_2b.clone_up_to_view(),
+                    opn_2b: *opn_2b,
+                    val_2b: clone_request_batch_up_to_view(val_2b),
+                },
+
+            CMessage::CMessageHeartbeat { bal_heartbeat, suspicious, opn_ckpt } =>
+                CMessage::CMessageHeartbeat {
+                    bal_heartbeat: bal_heartbeat.clone_up_to_view(),
+                    suspicious: *suspicious,
+                    opn_ckpt: *opn_ckpt,
+                },
+
+            CMessage::CMessageReply { seqno_reply, reply } =>
+                CMessage::CMessageReply {
+                    seqno_reply: *seqno_reply,
+                    reply: reply.clone_up_to_view(),
+                },
+
+            CMessage::CMessageAppStateRequest { bal_state_req, opn_state_req } =>
+                CMessage::CMessageAppStateRequest {
+                    bal_state_req: bal_state_req.clone_up_to_view(),
+                    opn_state_req: *opn_state_req,
+                },
+
+            CMessage::CMessageAppStateSupply { bal_state_supply, opn_state_supply, app_state, reply_cache } =>
+                CMessage::CMessageAppStateSupply {
+                    bal_state_supply: bal_state_supply.clone_up_to_view(),
+                    opn_state_supply: *opn_state_supply,
+                    app_state: *app_state,
+                    reply_cache: clone_creply_cache_up_to_view(reply_cache),
+                },
+
+            CMessage::CMessageStartingPhase2 { bal_2, logTruncationPoint_2 } =>
+                CMessage::CMessageStartingPhase2 {
+                    bal_2: bal_2.clone_up_to_view(),
+                    logTruncationPoint_2: *logTruncationPoint_2,
+                },
+        }
+    }
+
+        pub open spec fn abstractable(self) -> bool
         {
             match self {
                 CMessage::CMessageInvalid{} => true,
@@ -148,7 +222,7 @@ verus!{
             }
         }
 
-        pub open spec fn valid(self) -> bool 
+        pub open spec fn valid(self) -> bool
         {
             &&& self.abstractable()
             &&& match self {
@@ -188,7 +262,7 @@ verus!{
 
     #[derive(Clone)]
     pub struct CPacket{
-        pub dst: EndPoint, 
+        pub dst: EndPoint,
         pub src: EndPoint,
         pub msg: CMessage,
     }

@@ -10,12 +10,19 @@ use vstd::{set::*, set_lib::*};
 // use crate::protocol::RSL::environment::*;
 use crate::common::framework::environment_s::*;
 use crate::common::native::io_s::*;
+use crate::implementation::common::marshalling::*;
 use crate::implementation::RSL::appinterface::*;
+
 use crate::protocol::RSL::types::*;
 use crate::services::RSL::app_state_machine::*;
-use crate::implementation::common::marshalling::*;
 verus! {
     pub type COperationNumber = u64;
+
+    // pub fn clone_coperationnumber_up_to_view(opn: &COperationNumber) -> (res: COperationNumber)
+    // ensures res@ == opn@
+    // {
+    //     *opn
+    // }
 
     pub open spec fn AbstractifyCOperationNumberToOperationNumber(s:COperationNumber) -> int
         recommends
@@ -40,27 +47,37 @@ verus! {
         }
     }
 
-    pub open spec fn CBalLt(ba:&CBallot, bb:&CBallot) -> (r:bool)
-        recommends
+    pub fn CBalLt(ba:&CBallot, bb:&CBallot) -> (r:bool)
+        requires
             ba.valid(),
             bb.valid(),
-        // ensures r == BalLt(ba.abstractify(), bb.abstractify())
+        ensures r == BalLt(ba@, bb@)
     {
-        ||| ba.seqno < bb.seqno
-        ||| (ba.seqno == bb.seqno && ba.proposer_id < bb.proposer_id)
+        ba.seqno < bb.seqno
+        || (ba.seqno == bb.seqno && ba.proposer_id < bb.proposer_id)
     }
 
-    pub open spec fn CBalLeq(ba:&CBallot, bb:&CBallot) -> (r:bool)
-        recommends
+    pub fn CBalLeq(ba:&CBallot, bb:&CBallot) -> (r:bool)
+        requires
             ba.valid(),
             bb.valid(),
-        // ensures r == BalLeq(ba.abstractify(), bb.abstractify())
+        ensures r == BalLeq(ba@, bb@)
     {
-        ||| ba.seqno < bb.seqno
-        ||| (ba.seqno == bb.seqno && ba.proposer_id <= bb.proposer_id)
+        ba.seqno < bb.seqno
+        || (ba.seqno == bb.seqno && ba.proposer_id <= bb.proposer_id)
     }
 
     impl CBallot {
+
+        pub fn clone_up_to_view(&self) -> (res: CBallot)
+        ensures res@ == self@
+        {
+            CBallot {
+                seqno: self.seqno,
+                proposer_id: self.proposer_id,
+            }
+        }
+
         pub open spec fn abstractable(self) -> bool
         {
             self.proposer_id < 0xFFFF_FFFF_FFFF_FFFF
@@ -87,7 +104,30 @@ verus! {
         }
     }
 
+    impl View for CRequest {
+        type V = Request;
+        open spec fn view(&self) -> Request
+        {
+            Request{
+                client : self.client@,
+                seqno : self.seqno as int,
+                request : self.request@,
+            }
+        }
+    }
+
     impl CRequest {
+
+    pub fn clone_up_to_view(&self) -> (res: CRequest)
+        ensures res@ == self@
+        {
+            CRequest {
+                client: self.client.clone_up_to_view(),
+                seqno: self.seqno,
+                request: self.request.clone_up_to_view()
+            }
+        }
+
         pub open spec fn abstractable(self) -> bool {
             &&& self.client.abstractable()
             &&& self.request.abstractable()
@@ -99,15 +139,15 @@ verus! {
             &&& self.request.valid()
         }
 
-        pub open spec fn view(self) -> Request
-            recommends self.abstractable()
-        {
-            Request{
-                client : self.client@,
-                seqno : self.seqno as int,
-                request : self.request@,
-            }
-        }
+        // pub open spec fn view(self) -> Request
+        //     recommends self.abstractable()
+        // {
+        //     Request{
+        //         client : self.client@,
+        //         seqno : self.seqno as int,
+        //         request : self.request@,
+        //     }
+        // }
     }
 
     define_struct_and_derive_marshalable!{
@@ -120,6 +160,17 @@ verus! {
     }
 
     impl CReply {
+
+        pub fn clone_up_to_view(&self) -> (res: CReply)
+        ensures res@ == self@
+    {
+        CReply {
+            client: self.client.clone_up_to_view(),
+            seqno: self.seqno,
+            reply: self.reply.clone_up_to_view(),
+            }
+        }
+
         pub open spec fn abstractable(self) -> bool {
             &&& self.client.abstractable()
             &&& self.reply.abstractable()
@@ -143,6 +194,27 @@ verus! {
     }
 
     pub type CRequestBatch = Vec<CRequest>;
+
+    #[verifier(external_body)]
+    pub fn clone_request_batch_up_to_view(batch: &CRequestBatch) -> (res: CRequestBatch)
+    ensures
+        res@ == batch@,
+        forall |i: int| 0 <= i < batch.len() ==> res[i]@ == batch[i]@
+{
+    let mut cloned:Vec<CRequest> = Vec::new();
+    let mut i = 0;
+    while i < batch.len()
+        invariant
+            cloned.len() == i,
+            forall |j: int| 0 <= j < i ==> cloned[j]@ == batch[j]@
+    {
+        assert (forall |i: int| 0 <= i < cloned.len() ==> cloned[i]@ == batch[i]@);
+        cloned.push(batch[i].clone_up_to_view());
+        i += 1;
+    }
+    cloned
+}
+
 
     pub open spec fn crequestbatch_is_abstractable(s:CRequestBatch) -> bool {
         forall |i:int| #![auto] 0 <= i < s.len() ==> s[i].abstractable()
@@ -168,6 +240,40 @@ verus! {
     pub open spec fn RequestBatchSizeLimit() -> int { 1000 }
 
     pub type CReplyCache = HashMap<EndPoint, CReply>;
+
+    #[verifier(external_body)]
+    pub fn clone_creply_cache_up_to_view(cache: &CReplyCache) -> (res: CReplyCache)
+        ensures
+            res@ == cache@,
+            forall |k| cache@.contains_key(k) ==> res@.contains_key(k),
+            forall |k| res@.contains_key(k) ==> cache@.contains_key(k),
+            forall |k| res@.contains_key(k) ==> res@[k] == cache@[k]
+    {
+        let mut cloned:HashMap<EndPoint, CReply> = HashMap::new();
+
+        // Manually collect keys to avoid iterator issues
+        let mut keys: Vec<EndPoint> = Vec::new();
+        let mut i = 0;
+
+    for k in cache.keys() {
+        keys.push(k.clone_up_to_view());
+    }
+
+    let mut j = 0;
+    while j < keys.len()
+        invariant
+            0 <= j <= keys.len(),
+            forall |k: int| 0 <= k < j ==> cloned.contains_key(&keys[k]) && cloned@[keys[k]] == cache@[keys[k]]
+    {
+        let key = keys[j].clone_up_to_view();
+        let val = cache.get(&key).unwrap();
+        cloned.insert(key, val.clone_up_to_view());
+        j += 1;
+    }
+
+        cloned
+    }
+
 
     pub open spec fn creplycache_is_abstractable(m:CReplyCache) -> bool {
         forall |i| #![auto] m@.contains_key(i) ==> i.abstractable() && m@[i].abstractable()
@@ -199,6 +305,16 @@ verus! {
     }
 
     impl CVote{
+
+        pub fn clone_up_to_view(&self) -> (res: CVote)
+        ensures res@ == self@
+        {
+            CVote {
+                max_value_bal: self.max_value_bal.clone_up_to_view(),
+                max_val: clone_request_batch_up_to_view(&self.max_val),
+            }
+        }
+
         pub open spec fn abstractable(self) -> bool{
             &&& self.max_value_bal.abstractable()
             &&& crequestbatch_is_abstractable(self.max_val)
@@ -221,6 +337,40 @@ verus! {
     }
 
     pub type CVotes = HashMap<COperationNumber, CVote>;
+
+    #[verifier(external_body)]
+    pub fn clone_cvotes_up_to_view(votes: &CVotes) -> (res: CVotes)
+    ensures
+        res@ == votes@,
+        forall |k| votes@.contains_key(k) ==> res@.contains_key(k),
+        forall |k| res@.contains_key(k) ==> votes@.contains_key(k),
+        forall |k| res@.contains_key(k) ==> res@.index(k) == votes@.index(k)
+{
+    let mut cloned:HashMap<COperationNumber, CVote> = HashMap::new();
+
+    // Avoid borrow issues by collecting keys separately
+    let mut keys: Vec<COperationNumber> = Vec::new();
+    for &k in votes.keys() {
+        keys.push(k);
+    }
+
+    let mut i = 0;
+    while i < keys.len()
+        invariant
+            i <= keys.len(),
+            forall |j: int| 0 <= j < i ==> {
+                let k = keys[j];
+                cloned.contains_key(&k) && cloned@.index(k) == votes@.index(k)
+            }
+    {
+        let k = keys[i];
+        let v = votes.get(&k).unwrap();
+        cloned.insert(k, v.clone_up_to_view());
+        i += 1;
+    }
+    cloned
+}
+
 
     pub open spec fn cvotes_is_abstractable(m:CVotes) -> bool {
         forall |i| #![auto] m@.contains_key(i) ==> COperationNumberIsAbstractable(i) && m@[i].abstractable()

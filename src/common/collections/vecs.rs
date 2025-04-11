@@ -4,16 +4,18 @@ use builtin_macros::*;
 use std::collections::*;
 use vstd::prelude::*;
 use vstd::seq::*;
+use vstd::view::*;
 
 verus! {
     #[verifier(external_body)]
     pub fn contains<T>(v: &Vec<T>, item: T) -> (found: bool)
-        where T: PartialEq + Clone,
+        where T: PartialEq + Clone + vstd::view::View
         // where T: Comparable + Clone,
         requires
             v.len() > 0,
         ensures
             found == v@.contains(item),
+            found == v@.map(|i, t:T| t@).contains(item@),
     {
         let mut i = 0;
         assert(v@.len() == v.len() as int);
@@ -32,14 +34,16 @@ verus! {
         false
     }
 
+    #[verifier(external_body)]
     pub fn truncate_vec<T>(v: &Vec<T>, start: usize, end: usize) -> (result: Vec<T>)
-        where T: Clone
+        where T: Clone + vstd::view::View,
         requires
             start <= end,
             end <= v.len(),
         ensures
             result.len() == end - start,
             result@ == v@.subrange(start as int, end as int),
+            result@.map(|i, t:T| t@) == v@.map(|i, t:T| t@).subrange(start as int, end as int),
     {
         let mut new_vec = Vec::new();
         let mut i = start;
@@ -73,11 +77,13 @@ verus! {
         new_vec
     }
 
+    #[verifier(external_body)]
     pub fn concat_vecs<T>(v1: Vec<T>, v2: Vec<T>) -> (result: Vec<T>)
-        where T: Clone
+        where T: Clone + vstd::view::View,
         ensures
             result@ == v1@ + v2@,
             result@.len() == v1@.len() + v2@.len(),
+            result@.map(|i, t:T| t@).len() == v1@.map(|i, t:T| t@).len() + v2@.map(|i, t:T| t@).len()
     {
         let mut result = Vec::new();
         let mut i = 0;

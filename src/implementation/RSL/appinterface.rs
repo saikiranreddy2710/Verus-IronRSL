@@ -13,7 +13,6 @@ use crate::services::RSL::app_state_machine::*;
 
 use crate::implementation::common::marshalling::*;
 
-
 verus! {
     pub type CAppState = u64;
 
@@ -54,6 +53,17 @@ verus! {
     }
 
     impl CAppMessage {
+
+        pub fn clone_up_to_view(&self) -> (res: CAppMessage)
+        ensures res@ == self@
+    {
+        match self {
+            CAppMessage::CAppIncrement {} => CAppMessage::CAppIncrement {},
+            CAppMessage::CAppReply { response } => CAppMessage::CAppReply { response: *response },
+            CAppMessage::CAppInvalid {} => CAppMessage::CAppInvalid {},
+        }
+    }
+
         pub open spec fn abstractable(&self) -> bool {
             true
         }
