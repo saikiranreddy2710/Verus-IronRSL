@@ -3,7 +3,7 @@ use builtin::*;
 use builtin_macros::*;
 use std::collections::HashMap;
 use std::{result, vec};
-use vstd::rwlock::RwLockToks::Config;
+// use vstd::rwlock::RwLockToks::Config;
 use vstd::{invariant, map::*, prelude::*, seq::*};
 
 use crate::common::collections::*;

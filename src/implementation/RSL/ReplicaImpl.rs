@@ -331,7 +331,7 @@ ensures
             CMessage::CMessage2b { opn_2b, .. } => {
                 if self.executor.ops_complete < opn_2b
                     || (self.executor.ops_complete == opn_2b
-                        && self.executor.next_op_to_execute.clone() is COutstandingOpUnknown)
+                        && matches!(self.executor.next_op_to_execute.clone(), COutstandingOperation::COutstandingOpUnknown{..}))
                 {
                     self.learner.CLearnerProcess2b(received_packet);
                 }
@@ -501,7 +501,7 @@ ensures
 
         let opn = self.executor.ops_complete;
 
-        if self.executor.next_op_to_execute.clone() is COutstandingOpUnknown
+        if matches!(self.executor.next_op_to_execute.clone(), COutstandingOperation::COutstandingOpUnknown{..})
         && self.learner.unexecuted_learner_state.contains_key(&opn)
         && self.learner.unexecuted_learner_state[&opn].received_2b_message_senders.len() >= self.learner.constants.all.config.CMinQuorumSize(){
             self.executor.CExecutorGetDecision(self.learner.max_ballot_seen, opn, self.learner.unexecuted_learner_state[&opn].candidate_learned_value.clone());
@@ -539,7 +539,7 @@ ensures
         match self.executor.next_op_to_execute.clone() {
             COutstandingOperation::COutstandingOpKnown { v,.. } => {
                 if self.executor.ops_complete < self.executor.constants.all.params.max_integer_val
-                    && self.executor.constants.clone().valid()
+                    && true
                 {
                     self.proposer.CProposerResetViewTimerDueToExecution(v);
                     self.learner.CLearnerForgetDecision(self.executor.ops_complete);

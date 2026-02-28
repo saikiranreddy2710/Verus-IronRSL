@@ -293,3 +293,21 @@ verus! {
         }
     }
 }
+
+// Manual Hash and Eq implementations for CPacket to allow HashSet operations.
+// These are needed by std::collections::HashSet but are normally provided by
+// Verus's rust_verify compiler within verus!{} blocks.
+impl std::hash::Hash for CPacket {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.dst.id.hash(state);
+        self.src.id.hash(state);
+    }
+}
+
+impl PartialEq for CPacket {
+    fn eq(&self, other: &Self) -> bool {
+        self.dst.id == other.dst.id && self.src.id == other.src.id
+    }
+}
+
+impl Eq for CPacket {}

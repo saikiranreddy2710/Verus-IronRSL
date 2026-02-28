@@ -1,4 +1,4 @@
-#![verus::trusted]
+#![cfg_attr(verus_keep_ghost, verus::trusted)]
 
 use vstd::prelude::*;
 use vstd::seq_lib::*;

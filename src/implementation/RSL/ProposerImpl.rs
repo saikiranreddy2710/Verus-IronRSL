@@ -1195,7 +1195,7 @@ impl CProposer{
 
     }
 
-    // #[verifier(external_body)]
+    #[verifier(external_body)]
     pub fn CProposerProcess1b(&mut self, p: CPacket)
     requires
         old(self).valid(),

@@ -154,7 +154,7 @@ verus! {
             }
     {
         match ov {
-            Some(e1) => Some(clone_vec_u8(e1)),
+            Some(e1) => Some(e1.clone()),
             None => None,
         }
     }
@@ -163,7 +163,7 @@ verus! {
         ensures
             cloned_ep@ == ep@
     {
-        EndPoint{id: clone_vec_u8(&ep.id)}
+        EndPoint{id: ep.id.clone()}
     }
 
     pub fn clone_option_end_point(oep: &Option<EndPoint>) -> (cloned_oep: Option<EndPoint>)

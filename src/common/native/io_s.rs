@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 use crate::common::collections::comparable::*;
-use crate::common::framework::{args_t::clone_vec_u8, environment_s::*};
+use crate::common::framework::environment_s::*;
 use crate::implementation::common::marshalling::*;
 use builtin::*;
 use builtin_macros::*;
@@ -87,7 +87,7 @@ verus! {
         pub fn clone_up_to_view(&self) -> (res: EndPoint)
             ensures res@ == self@
         {
-            EndPoint{id: clone_vec_u8(&self.id)}
+            EndPoint{id: self.id.clone()}
         }
 
         // pub open spec fn view(self) -> AbstractEndPoint {
