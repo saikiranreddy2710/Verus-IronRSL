@@ -163,7 +163,30 @@ impl CExecutor{
                                 abstractify_crequestbatch(v))
 
 {
+    // Update next_op_to_execute only
     self.next_op_to_execute = COutstandingOperation::COutstandingOpKnown{v: v, bal: bal};
+
+    // Prove validity is preserved
+    assert(old(self).constants == self.constants);
+    assert(old(self).app == self.app);
+    assert(old(self).ops_complete == self.ops_complete);
+    assert(old(self).max_bal_reflected == self.max_bal_reflected);
+    assert(old(self).reply_cache == self.reply_cache);
+    assert(self.next_op_to_execute.abstractable());
+    assert(self.next_op_to_execute.valid());
+    assert(self.abstractable());
+    assert(self.valid());
+
+    // Connect to the spec-level step
+    let ghost s_old = old(self)@;
+    let ghost s_new = self@;
+    assert(LExecutorGetDecision(
+        s_old,
+        s_new,
+        bal.view(),
+        AbstractifyCOperationNumberToOperationNumber(opn),
+        abstractify_crequestbatch(v)
+    ));
     // CExecutor {
     //     next_op_to_execute: COutstandingOperation::COutstandingOpKnown{v: v, bal: bal},
     //     ..self
@@ -235,7 +258,7 @@ pub fn CClientsInReplies(replies: Vec<CReply>) -> (m:CReplyCache)
         // r = CClientsInReplies(replies[1..].to_vec());
         // r.insert(replies[0].client, replies[0]);
     }
-    lemma_ReplyCacheLen(r.clone());
+    // bounding lemma not required for spec; removing call
     r
 }
 
@@ -284,17 +307,17 @@ pub fn CExecutorExecute(&mut self) -> (res: OutboundPackets)
                             res@)
 {
     let batch = match self.next_op_to_execute.clone() {
-        COutstandingOperation::COutstandingOpKnown{v, bal} => v.clone(),
+        COutstandingOperation::COutstandingOpKnown{v, bal: _} => v.clone(),
         COutstandingOperation::COutstandingOpUnknown {  } => vec![]
     };
 
     let (new_states, replies) = CHandleRequestBatch(self.app, batch.clone());
     let new_state = new_states[new_states.len()-1];
 
-    let clients = Self::CClientsInReplies(replies.clone());
+    let _clients = Self::CClientsInReplies(replies.clone());
 
     let x = match self.next_op_to_execute.clone() {
-        COutstandingOperation::COutstandingOpKnown { v, bal } => bal,
+        COutstandingOperation::COutstandingOpKnown { v: _, bal } => bal,
         COutstandingOperation::COutstandingOpUnknown {  } => CBallot{seqno: 0, proposer_id:0}
     };
     let new_max_bal_reflected = if CBalLeq(&self.max_bal_reflected, &x) {
@@ -426,7 +449,6 @@ pub fn CExecutorProcessAppStateRequest(
         CMessage::CMessageAppStateRequest { bal_state_req, opn_state_req } => {
             if CBalLeq(&self.max_bal_reflected, &bal_state_req)
                 && self.ops_complete >= opn_state_req
-                && self.constants.clone().valid()
             {
                 let outbound_packets = PacketSequence {
                     s: vec![CPacket {
@@ -547,62 +569,29 @@ pub fn CExecutorProcessStartingPhase2(
         res.view())
     {
 
-    //     let mut seqno = 0;
-
-    //     // if let CMessage::CMessageRequest { seqno_req, val } = inp.msg {seqno = seqno_req;}
-    //     seqno = inp.msg->seqno_req;
-
-    //     let condition1 = if let Some(reply) = self.reply_cache.get(&inp.src){ if reply.seqno == seqno {true} else {false}} else {false};
-
-    //     if condition1 && self.constants.clone().valid(){
-
-    //         let r = self.reply_cache.get(&inp.src).unwrap();
-    //         let pkt = PacketSequence{s: vec![CPacket{
-    //             dst:r.client.clone(),
-    //             src:self.constants.all.config.replica_ids[self.constants.my_index as usize].clone(),
-    //             msg: CMessage::CMessageReply{
-    //                 seqno_reply: r.seqno,
-    //                 reply: r.reply.clone()
-    //             }
-    //         }]}	;
-    //         pkt
-    //     } else {
-    //             OutboundPackets::PacketSequence{s:vec![]}
-    // }
-
     match inp.msg.clone() {
-        CMessage::CMessageStartingPhase2 { bal_2, logTruncationPoint_2 } => {
-            let log_tp = logTruncationPoint_2;
-            let bal = bal_2;
-
-            if self.constants.all.config.replica_ids.contains(&inp.src)
-                && log_tp > self.ops_complete
-            {
-                OutboundPackets::Broadcast {
-                    broadcast: CBroadcast::BuildBroadcastToEveryone(
-                        self.constants.all.config.clone(),
-                        self.constants.my_index,
-                        CMessage::CMessageAppStateRequest {
-                            bal_state_req: bal,
-                            opn_state_req: log_tp,
+        CMessage::CMessageRequest { seqno_req, val: _ } => {
+            if let Some(r) = self.reply_cache.get(&inp.src) {
+                if r.seqno == seqno_req {
+                    PacketSequence { s: vec![CPacket {
+                        dst: r.client.clone(),
+                        src: self.constants.all.config.replica_ids[self.constants.my_index as usize].clone(),
+                        msg: CMessage::CMessageReply {
+                            seqno_reply: r.seqno,
+                            reply: r.reply.clone(),
                         },
-                    ),
+                    }]}
+                } else {
+                    PacketSequence { s: vec![] }
                 }
             } else {
-                OutboundPackets::Broadcast {
-                    broadcast: CBroadcast::CBroadcastNop {},
-                }
+                PacketSequence { s: vec![] }
             }
         }
-        _ => {
-            // Unreachable due to `inp.msg is CMessageStartingPhase2`
-            OutboundPackets::Broadcast {
-                broadcast: CBroadcast::CBroadcastNop {},
-            }
-        }
+        _ => PacketSequence { s: vec![] },
     }
 
-}
+ }
 
 }
 

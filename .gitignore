@@ -10,4 +10,9 @@ lib.pdb
 *~
 venv/
 bin/
-doubts.txt
+doubts.txtnode_modules/
+.idea/
+target/
+*.swp
+*.swo
+.DS_Store

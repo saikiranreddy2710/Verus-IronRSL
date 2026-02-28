@@ -3,7 +3,7 @@ use builtin_macros::*;
 use vstd::seq::*;
 use vstd::set::*;
 
-verus!{
+verus! {
     // pub proof fn ThingsIKnowAboutSubset<T>(x:Set<T>, y:Set<T>)
     //     requires x.subset_of(y)
     //     ensures x.len()<y.len()
@@ -20,7 +20,7 @@ verus!{
     // {
     //     if (x.subset_of(y)) {
 
-    //     } 
+    //     }
     //     if (x==y) {
 
     //     }

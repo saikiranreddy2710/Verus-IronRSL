@@ -9,13 +9,10 @@ use vstd::multiset::*;
 use vstd::pervasive::*;
 use vstd::seq::*;
 
-use crate::implementation::common::marshalling::Marshalable;
+// use verus_test::implementation::common::marshalling::Marshalable;
 
-mod common;
-mod implementation;
-mod protocol;
-mod services;
-mod verus_extra;
+// Access library modules via the crate `verus_test` if needed
+// use verus_test::{common, implementation, protocol, services, verus_extra};
 
 verus! {
     pub proof fn my_proof(x: bool) {

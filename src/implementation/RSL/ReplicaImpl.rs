@@ -1,5 +1,5 @@
 use crate::implementation::common::upper_bound::*;
-use crate::implementation::common::upper_bound_i::*;
+//use crate::implementation::common::upper_bound_i::*;
 use crate::implementation::RSL::types_i::*;
 use builtin::*;
 use builtin_macros::*;
@@ -222,6 +222,7 @@ pub fn CReplicaNextProcess1b(&mut self, received_packet: CPacket ) -> (res: Outb
                     && self.proposer.current_state == 1
                     && samesrc
                 {
+                    self.proposer.CProposerProcess1b(received_packet.clone());
                     self.acceptor.CAcceptorTruncateLog(log_truncation_point);
                 }
 
@@ -480,8 +481,7 @@ ensures
     self@,
     res@)
     {
-        let res = OutboundPackets::PacketSequence { s: vec![] };
-        // let res = self.proposer.CProposerMaybeEnterPhase2(self.acceptor.log_truncation_point);
+        let res = self.proposer.CProposerMaybeEnterPhase2(self.acceptor.log_truncation_point);
         res
 
     }
@@ -668,11 +668,11 @@ ensures
     self.valid(),
     Replica_Common_Postconditions_NoPacket(old(self)@,*self,res),
     res.valid(),
-    LReplicaNextReadClockCheckForQuorumOfViewSuspicions(old(self)@,
+    LReplicaNextReadClockMaybeNominateValueAndSend2a(old(self)@,
     self@,
     ClockReading{t: clock as int},
     res@){
-        let res = self.proposer.CProposerNominateNewValueAndSend2a(clock, self.acceptor.log_truncation_point);
+        let res = self.proposer.CProposerMaybeNominateValueAndSend2a(clock, self.acceptor.log_truncation_point);
         res
     }
 

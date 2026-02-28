@@ -10,11 +10,8 @@ use crate::protocol::RSL::types::*;
 use crate::protocol::RSL::message::*;
 use crate::protocol::RSL::state_machine::*;
 use crate::protocol::RSL::election::*;
-
 use crate::protocol::common::upper_bound::*;
-
 use crate::services::RSL::app_state_machine::*;
-
 use crate::common::framework::environment_s::*;
 use crate::common::native::io_s::*;
 
@@ -154,6 +151,15 @@ verus! {
     recommends 
             WellFormedLConfiguration(c.all.config)
     {
+        &&& s.constants == c
+        &&& s.current_state == 0
+        &&& s.request_queue == Seq::empty()
+        &&& s.max_ballot_i_sent_1a == Ballot { seqno: 0, proposer_id: c.my_index }
+        &&& s.next_operation_number_to_propose == 0
+        &&& s.received_1b_packets == Set::empty()
+        &&& s.highest_seqno_requested_by_client_this_view == Map::empty()
+        &&& s.incomplete_batch_timer is IncompleteBatchTimerOff
+        &&& ElectionStateInit(s.election_state, c)
         
     }
 
@@ -165,6 +171,36 @@ verus! {
     recommends 
             packet.msg is RslMessageRequest
     {
+        let val = request { client: packet.src, seqno: packet.msg->seqno_req, val: packet.msg->val };
+        &&& ElectionStateReflectReceivedRequest(s.election_state, s_.election_state, val)
+        &&& if s.current_state != 0
+            && (!s.highest_seqno_requested_by_client_this_view.contains_key(val.client)
+                || val.seqno > s.highest_seqno_requested_by_client_this_view[val.client])
+        {
+            &&& s_ == LProposer {
+                constants: s.constants,
+                current_state: s.current_state,
+                request_queue: s.request_queue + seq![val],
+                max_ballot_i_sent_1a: s.max_ballot_i_sent_1a,
+                next_operation_number_to_propose: s.next_operation_number_to_propose,
+                received_1b_packets: s.received_1b_packets,
+                highest_seqno_requested_by_client_this_view: s.highest_seqno_requested_by_client_this_view.insert(val.client, val.seqno),
+                incomplete_batch_timer: s.incomplete_batch_timer,
+                election_state: s_.election_state,
+            }
+        } else {
+            s_ == LProposer {
+                constants: s.constants,
+                current_state: s.current_state,
+                request_queue: s.request_queue,
+                max_ballot_i_sent_1a: s.max_ballot_i_sent_1a,
+                next_operation_number_to_propose: s.next_operation_number_to_propose,
+                received_1b_packets: s.received_1b_packets,
+                highest_seqno_requested_by_client_this_view: s.highest_seqno_requested_by_client_this_view,
+                incomplete_batch_timer: s.incomplete_batch_timer,
+                election_state: s_.election_state,
+            }
+        }
         
     }
 
@@ -174,7 +210,25 @@ verus! {
         sent_packets:Seq<RslPacket>
     ) -> bool
     {
-        
+        if s.election_state.current_view.proposer_id == s.constants.my_index
+            && BalLt(s.max_ballot_i_sent_1a, s.election_state.current_view)
+        {
+            &&& s_ == LProposer {
+                constants: s.constants,
+                current_state: 1,
+                request_queue: s.election_state.requests_received_prev_epochs + s.election_state.requests_received_this_epoch,
+                max_ballot_i_sent_1a: s.election_state.current_view,
+                next_operation_number_to_propose: s.next_operation_number_to_propose,
+                received_1b_packets: Set::empty(),
+                highest_seqno_requested_by_client_this_view: Map::empty(),
+                incomplete_batch_timer: s.incomplete_batch_timer,
+                election_state: s.election_state,
+            }
+            &&& sent_packets == LBroadcastToEveryone(s.constants.all.config, s.constants.my_index, RslMessage::RslMessage1a { bal_1a: s.election_state.current_view }, 0)
+        } else {
+            &&& s_ == s
+            &&& sent_packets == Seq::empty()
+        }
     }
 
     pub open spec fn LProposerProcess1b(
@@ -189,7 +243,17 @@ verus! {
             s.current_state == 1,
             forall |other_packet:RslPacket| s.received_1b_packets.contains(other_packet) ==> other_packet.src != p.src
     {
-        
+         s_ == LProposer {
+            constants: s.constants,
+            current_state: s.current_state,
+            request_queue: s.request_queue,
+            max_ballot_i_sent_1a: s.max_ballot_i_sent_1a,
+            next_operation_number_to_propose: s.next_operation_number_to_propose,
+            received_1b_packets: s.received_1b_packets.insert(p),
+            highest_seqno_requested_by_client_this_view: s.highest_seqno_requested_by_client_this_view,
+            incomplete_batch_timer: s.incomplete_batch_timer,
+            election_state: s.election_state,
+        }
     }
 
     pub open spec fn LProposerMaybeEnterPhase2(
@@ -199,6 +263,29 @@ verus! {
         sent_packets:Seq<RslPacket>
     ) -> bool
     {
+        if s.received_1b_packets.len() >= LMinQuorumSize(s.constants.all.config)
+            && LSetOfMessage1bAboutBallot(s.received_1b_packets, s.max_ballot_i_sent_1a)
+            && s.current_state == 1
+        {
+            &&& s_ == LProposer {
+                constants: s.constants,
+                current_state: 2,
+                request_queue: s.request_queue,
+                max_ballot_i_sent_1a: s.max_ballot_i_sent_1a,
+                next_operation_number_to_propose: log_truncation_point,
+                received_1b_packets: s.received_1b_packets,
+                highest_seqno_requested_by_client_this_view: s.highest_seqno_requested_by_client_this_view,
+                incomplete_batch_timer: s.incomplete_batch_timer,
+                election_state: s.election_state,
+            }
+            &&& sent_packets == LBroadcastToEveryone(s.constants.all.config, s.constants.my_index, RslMessage::RslMessageStartingPhase2 {
+                bal_2: s.max_ballot_i_sent_1a,
+                logTruncationPoint_2: log_truncation_point,
+            },  0)
+        } else {
+            &&& s_ == s
+            &&& sent_packets == Seq::empty()
+        }
         
     }
     
@@ -213,7 +300,35 @@ verus! {
             LProposerCanNominateUsingOperationNumber(s, log_truncation_point, s.next_operation_number_to_propose),
             LAllAcceptorsHadNoProposal(s.received_1b_packets, s.next_operation_number_to_propose)
     {
-        
+        let batch_size = if s.request_queue.len() <= s.constants.all.params.max_batch_size || s.constants.all.params.max_batch_size < 0 {
+            s.request_queue.len()
+        } else {
+            s.constants.all.params.max_batch_size
+        };
+        let v = s.request_queue.subrange(0, batch_size);
+        let opn = s.next_operation_number_to_propose;
+        &&& s_ == LProposer {
+            constants: s.constants,
+            current_state: s.current_state,
+            request_queue: s.request_queue.subrange(batch_size, s.request_queue.len()),
+            max_ballot_i_sent_1a: s.max_ballot_i_sent_1a,
+            next_operation_number_to_propose: s.next_operation_number_to_propose + 1,
+            received_1b_packets: s.received_1b_packets,
+            highest_seqno_requested_by_client_this_view: s.highest_seqno_requested_by_client_this_view,
+            incomplete_batch_timer: if s.request_queue.len() > batch_size {
+                IncompleteBatchTimer::IncompleteBatchTimerOn {
+                    when: UpperBoundedAddition(clock, s.constants.all.params.max_batch_delay, s.constants.all.params.max_integer_val)
+                }
+            } else {
+                IncompleteBatchTimer::IncompleteBatchTimerOff {}
+            },
+            election_state: s.election_state,
+        }
+        &&& sent_packets == LBroadcastToEveryone(s.constants.all.config, s.constants.my_index, RslMessage::RslMessage2a {
+            bal_2a: s.max_ballot_i_sent_1a,
+            opn_2a: opn,
+            val_2a: v,
+        }, 0)
     }
 
     pub open spec fn LProposerNominateOldValueAndSend2a(
@@ -225,7 +340,25 @@ verus! {
     recommends LProposerCanNominateUsingOperationNumber(s, log_truncation_point, s.next_operation_number_to_propose),
                  !LAllAcceptorsHadNoProposal(s.received_1b_packets, s.next_operation_number_to_propose)
     {
-        
+        exists |v: RequestBatch| {
+            &&& LValIsHighestNumberedProposal(v, s.received_1b_packets, s.next_operation_number_to_propose)
+            &&& s_ == LProposer {
+                constants: s.constants,
+                current_state: s.current_state,
+                request_queue: s.request_queue,
+                max_ballot_i_sent_1a: s.max_ballot_i_sent_1a,
+                next_operation_number_to_propose: s.next_operation_number_to_propose + 1,
+                received_1b_packets: s.received_1b_packets,
+                highest_seqno_requested_by_client_this_view: s.highest_seqno_requested_by_client_this_view,
+                incomplete_batch_timer: s.incomplete_batch_timer,
+                election_state: s.election_state,
+            }
+            &&& sent_packets == LBroadcastToEveryone(s.constants.all.config, s.constants.my_index, RslMessage::RslMessage2a {
+                bal_2a: s.max_ballot_i_sent_1a,
+                opn_2a: s.next_operation_number_to_propose,
+                val_2a: v,
+            }, 0)
+        }
     }
 
     pub open spec fn LProposerMaybeNominateValueAndSend2a(
@@ -236,6 +369,35 @@ verus! {
         sent_packets:Seq<RslPacket>
     ) -> bool 
     {
+        if !LProposerCanNominateUsingOperationNumber(s, log_truncation_point, s.next_operation_number_to_propose) {
+            &&& s_ == s
+            &&& sent_packets == Seq::empty()
+        } else if !LAllAcceptorsHadNoProposal(s.received_1b_packets, s.next_operation_number_to_propose) {
+            LProposerNominateOldValueAndSend2a(s, s_, log_truncation_point, sent_packets)
+        } else if (exists |opn: OperationNumber| opn > s.next_operation_number_to_propose && !LAllAcceptorsHadNoProposal(s.received_1b_packets, opn))
+            || s.request_queue.len() >= s.constants.all.params.max_batch_size
+            || (s.request_queue.len() > 0 && s.incomplete_batch_timer is IncompleteBatchTimerOn && clock >= s.incomplete_batch_timer->when)
+        {
+            LProposerNominateNewValueAndSend2a(s, s_, clock, log_truncation_point, sent_packets)
+        } else if s.request_queue.len() > 0 && s.incomplete_batch_timer is IncompleteBatchTimerOff {
+            &&& s_ == LProposer {
+                constants: s.constants,
+                current_state: s.current_state,
+                request_queue: s.request_queue,
+                max_ballot_i_sent_1a: s.max_ballot_i_sent_1a,
+                next_operation_number_to_propose: s.next_operation_number_to_propose,
+                received_1b_packets: s.received_1b_packets,
+                highest_seqno_requested_by_client_this_view: s.highest_seqno_requested_by_client_this_view,
+                incomplete_batch_timer: IncompleteBatchTimer::IncompleteBatchTimerOn {
+                    when: UpperBoundedAddition(clock, s.constants.all.params.max_batch_delay, s.constants.all.params.max_integer_val)
+                },
+                election_state: s.election_state,
+            }
+            &&& sent_packets == Seq::empty()
+        } else {
+            &&& s_ == s
+            &&& sent_packets == Seq::empty()
+        }
         
     }
 
@@ -248,6 +410,25 @@ verus! {
     recommends 
             p.msg is RslMessageHeartbeat
     {
+        &&& ElectionStateProcessHeartbeat(s.election_state, s_.election_state, p, clock)
+        &&& if BalLt(s.election_state.current_view, s_.election_state.current_view) {
+            &&& s_.current_state == 0
+            &&& s_.request_queue == Seq::empty()
+        } else {
+            &&& s_.current_state == s.current_state
+            &&& s_.request_queue == s.request_queue
+        }
+        &&& s_ == LProposer {
+            constants: s.constants,
+            current_state: s_.current_state,
+            request_queue: s_.request_queue,
+            max_ballot_i_sent_1a: s.max_ballot_i_sent_1a,
+            next_operation_number_to_propose: s.next_operation_number_to_propose,
+            received_1b_packets: s.received_1b_packets,
+            highest_seqno_requested_by_client_this_view: s.highest_seqno_requested_by_client_this_view,
+            incomplete_batch_timer: s.incomplete_batch_timer,
+            election_state: s_.election_state,
+        }
         
     }
 
@@ -257,6 +438,18 @@ verus! {
         clock:int
     ) -> bool
     {
+        &&& ElectionStateCheckForViewTimeout(s.election_state, s_.election_state, clock)
+        &&& s_ == LProposer {
+            constants: s.constants,
+            current_state: s.current_state,
+            request_queue: s.request_queue,
+            max_ballot_i_sent_1a: s.max_ballot_i_sent_1a,
+            next_operation_number_to_propose: s.next_operation_number_to_propose,
+            received_1b_packets: s.received_1b_packets,
+            highest_seqno_requested_by_client_this_view: s.highest_seqno_requested_by_client_this_view,
+            incomplete_batch_timer: s.incomplete_batch_timer,
+            election_state: s_.election_state,
+        }
         
     }
 
@@ -266,6 +459,25 @@ verus! {
         clock:int
     ) -> bool 
     {
+        &&& ElectionStateCheckForQuorumOfViewSuspicions(s.election_state, s_.election_state, clock)
+        &&& if BalLt(s.election_state.current_view, s_.election_state.current_view) {
+            &&& s_.current_state == 0
+            &&& s_.request_queue == Seq::empty()
+        } else {
+            &&& s_.current_state == s.current_state
+            &&& s_.request_queue == s.request_queue
+        }
+        &&& s_ == LProposer {
+            constants: s.constants,
+            current_state: s_.current_state,
+            request_queue: s_.request_queue,
+            max_ballot_i_sent_1a: s.max_ballot_i_sent_1a,
+            next_operation_number_to_propose: s.next_operation_number_to_propose,
+            received_1b_packets: s.received_1b_packets,
+            highest_seqno_requested_by_client_this_view: s.highest_seqno_requested_by_client_this_view,
+            incomplete_batch_timer: s.incomplete_batch_timer,
+            election_state: s_.election_state,
+        }
         
     }
 
@@ -275,7 +487,18 @@ verus! {
         val:RequestBatch
     ) -> bool    
     {
-        
+        &&& ElectionStateReflectExecutedRequestBatch(s.election_state, s_.election_state, val)
+        &&& s_ == LProposer {
+            constants: s.constants,
+            current_state: s.current_state,
+            request_queue: s.request_queue,
+            max_ballot_i_sent_1a: s.max_ballot_i_sent_1a,
+            next_operation_number_to_propose: s.next_operation_number_to_propose,
+            received_1b_packets: s.received_1b_packets,
+            highest_seqno_requested_by_client_this_view: s.highest_seqno_requested_by_client_this_view,
+            incomplete_batch_timer: s.incomplete_batch_timer,
+            election_state: s_.election_state,
+        }
     }
 
 

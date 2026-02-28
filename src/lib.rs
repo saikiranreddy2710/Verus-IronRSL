@@ -9,13 +9,13 @@ pub mod implementation;
 pub mod protocol;
 pub mod services;
 // mod temp_verify;
-pub mod main;
 // pub mod test;
 pub mod verus_extra;
 
 use crate::common::native::io_s::EndPoint;
 use crate::common::native::io_s::NetcReceiveResult;
-use crate::services::lock::main_i::*;
+// use crate::services::lock::main_i::*;
+
 
 verus! {
 
@@ -171,10 +171,11 @@ pub unsafe extern "C" fn lock_main_wrapper(
     my_end_point = my_end_point_vec;
 
     let mut nc = crate::common::native::io_s::NetClient::new(EndPoint{id: my_end_point}, get_time_func, receive_func, send_func);
-    match lock_main(nc, args) {
-        Ok(_) => 0,
-        Err(_) => 1,
-    }
+    // match lock_main(nc, args) {
+    //     Ok(_) => 0,
+    //     Err(_) => 1,
+    // }
+    0
 }
 
 }

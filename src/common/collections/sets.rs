@@ -3,7 +3,7 @@ use builtin_macros::*;
 use vstd::seq::*;
 use vstd::set::*;
 
-verus!{
+verus! {
     pub open spec fn Injective<X,Y>(f: spec_fn(X) -> Y) -> bool
     {
         forall |x1:X, x2:X| #![trigger f(x1), f(x2)] f(x1) == f(x2) ==> x1 == x2
@@ -47,10 +47,10 @@ verus!{
         recommends s.len() > 0
     {
         choose |m: int|
-            s.contains(m) && 
+            s.contains(m) &&
             forall |i: int| s.contains(i) ==> m >= i
     }
-    
+
     #[verifier::external_body]
     pub proof fn lemma_intsetmax_ensures(s: Set<int>)
         requires s.len() > 0
@@ -119,10 +119,10 @@ verus!{
     {
         if (x.subset_of(y)) {
 
-        } 
+        }
         if (x==y) {
 
         }
     }
-    
+
 }
